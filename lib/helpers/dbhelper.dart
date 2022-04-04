@@ -1,74 +1,91 @@
-import 'package:flutter/foundation.dart';
-import 'package:sqflite/sqflite.dart' as sql;
+//Muslimatul Rizki Aulia
+//2031710076
+
+import 'package:sqflite/sqflite.dart';
 import 'dart:async';
 import 'dart:io';
-import '../models/item.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:sqlite_flutter/models/item.dart';
 
-class SQLHelper {
+class DbHelper {
+  static DbHelper _dbHelper;
+  static Database _database;
+  DbHelper._createObject();
+  Future<Database> initDb() async {
+    //untuk menentukan nama database dan lokasi yg dibuat
+    Directory directory = await getApplicationDocumentsDirectory();
+    String path = directory.path + 'aulia.db';
+
+    //create, read databases
+    var itemDatabase = openDatabase(path, version: 4, onCreate: _createDb);
+
+    //mengembalikan nilai object sebagai hasil dari fungsinya
+    return itemDatabase;
+  }
+
   //buat tabel baru dengan nama item
-  static Future<void> createTables(sql.Database database) async {
-    await database.execute('''
-      CREATE TABLE items(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
-        price INTEGER
-      )
-    ''');
+  void _createDb(Database db, int version) async {
+    await db.execute('''
+ CREATE TABLE item (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ name TEXT,
+ price INTEGER,
+ stock INTEGER,
+ code TEXT
+ )
+ ''');
   }
 
-  static Future<sql.Database> db() async {
-    //create, read database
-    return sql.openDatabase(
-      'aulia.db',
-      version: 1,
-      onCreate: (sql.Database database, int version) async {
-        await createTables(database);
-      },
-    );
+//select databases
+  Future<List<Map<String, dynamic>>> select() async {
+    Database db = await initDb();
+    var mapList = await db.query('item', orderBy: 'name');
+    return mapList;
   }
 
-  //create new item
-  static Future<int> createItem(Item item) async {
-    final db = await SQLHelper.db();
-
-    int id = await db.insert('items', item.toMap(),
-        conflictAlgorithm: sql.ConflictAlgorithm.replace);
-    return id;
+//create databases
+  Future<int> insert(Item object) async {
+    Database db = await initDb();
+    int count = await db.insert('item', object.toMap());
+    return count;
   }
 
-  //read all items
-  static Future<List<Item>> getItemList() async {
-    final db = await SQLHelper.db();
-    var mapList = await db.query('items', orderBy: 'name');
-    int count = mapList.length;
+//update databases
+  Future<int> update(Item object) async {
+    Database db = await initDb();
+    int count = await db
+        .update('item', object.toMap(), where: 'id=?', whereArgs: [object.id]);
+    return count;
+  }
 
-    List<Item> itemList = [];
+//delete databases
+  Future<int> delete(int id) async {
+    Database db = await initDb();
+    int count = await db.delete('item', where: 'id=?', whereArgs: [id]);
+    return count;
+  }
+
+  Future<List<Item>> getItemList() async {
+    var itemMapList = await select();
+    int count = itemMapList.length;
+    // ignore: deprecated_member_use
+    List<Item> itemList = <Item>[];
     for (int i = 0; i < count; i++) {
-      itemList.add(Item.fromMap(mapList[i]));
+      itemList.add(Item.fromMap(itemMapList[i]));
     }
     return itemList;
   }
 
-  //read a single item by id
-  static Future<List<Map<String, dynamic>>> getItem(int id) async {
-    final db = await SQLHelper.db();
-    var item =
-        await db.query('items', where: 'id=?', whereArgs: [id], limit: 1);
-    return item;
+  factory DbHelper() {
+    if (_dbHelper == null) {
+      _dbHelper = DbHelper._createObject();
+    }
+    return _dbHelper;
   }
-
-  //update an item by id
-  static Future<int> updateItem(Item item) async {
-    final db = await SQLHelper.db();
-    final result = await db
-        .update('items', item.toMap(), where: 'id=?', whereArgs: [item.id]);
-    return result;
-  }
-
-  //delete an item by id
-  static Future<int> deleteItem(int id) async {
-    final db = await SQLHelper.db();
-    final result = await db.delete('items', where: 'id=?', whereArgs: [id]);
-    return result;
+  Future<Database> get database async {
+    if (_database == null) {
+      _database = await initDb();
+    }
+    return _database;
   }
 }

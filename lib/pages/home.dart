@@ -1,103 +1,118 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
-import '../helpers/dbhelper.dart';
-import '../pages/entryForm.dart';
 import 'package:sqflite/sqflite.dart';
 import 'dart:async';
-
-import '../models/item.dart';
+import 'package:sqlite_flutter/helpers/dbhelper.dart';
+import 'package:sqlite_flutter/pages/entryForm.dart';
+import 'package:sqlite_flutter/models/item.dart';
 
 class Home extends StatefulWidget {
-  const Home({Key? key}) : super(key: key);
-
   @override
-  State<Home> createState() => _HomeState();
+  HomeState createState() => HomeState();
 }
 
-class _HomeState extends State<Home> {
+class HomeState extends State<Home> {
+  DbHelper dbHelper = DbHelper();
   int count = 0;
-  List<Item> itemList = [];
-
+  List<Item> itemList;
   @override
   Widget build(BuildContext context) {
+    if (itemList == null) {
+      itemList = List<Item>();
+    }
     return Scaffold(
-        appBar: AppBar(
-          title: const Text('Daftar Item'),
+      appBar: AppBar(
+        title: const Text('Daftar Item -> Muslimatul RA (2031710076)'),
+        backgroundColor: Colors.pink,
+      ),
+      body: Column(children: [
+        Expanded(
+          child: createListView(),
         ),
-        body: Column(
-          children: [
-            Expanded(
-              child: createListView(),
+        Container(
+          alignment: Alignment.bottomCenter,
+          child: SizedBox(
+            width: double.infinity,
+            child: RaisedButton(
+              child: const Text("Tambah Item"),
+              onPressed: () async {
+                var item = await navigateToEntryForm(context, null);
+                if (item != null) {
+                  //TODO 2 Panggil Fungsi untuk Insert ke DB
+                  int result = await dbHelper.insert(item);
+                  if (result > 0) {
+                    updateListView();
+                  }
+                }
+              },
             ),
-            Container(
-              alignment: Alignment.bottomCenter,
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  child: const Text('Tambah Item'),
-                  onPressed: () async {
-                    var item = await navigateToEntryForm(context, null);
-                    if (item != null) {
-                      //TODO 2 Panggil Fungsi untuk Insert ke DB
-                      int result = await SQLHelper.createItem(item);
-                      if (result > 0) {
-                        updateListView();
-                      }
-                    }
-                  },
-                ),
-              ),
-            ),
-          ],
-        ));
-  }
-
-  ListView createListView() {
-    TextStyle? textStyle = Theme.of(context).textTheme.headline5;
-    return ListView.builder(
-        itemCount: count,
-        itemBuilder: (BuildContext context, int index) => Card(
-              color: Colors.white,
-              elevation: 2.0,
-              child: ListTile(
-                leading: const CircleAvatar(
-                  backgroundColor: Colors.red,
-                  child: Icon(Icons.ad_units),
-                ),
-                title: Text(
-                  itemList[index].name,
-                  style: textStyle,
-                ),
-                subtitle: Text(itemList[index].price.toString()),
-                trailing: GestureDetector(
-                  child: const Icon(Icons.delete),
-                  onTap: () async {
-                    //delete by id
-                    deleteItem(itemList[index]);
-                  },
-                ),
-                onTap: () async {
-                  var item =
-                      await navigateToEntryForm(context, itemList[index]);
-                  // 4 TODO: edit by id memanggil fungsi edit data
-                  editItem(itemList[index]);
-                },
-              ),
-            ));
-  }
-
-  Future<Item> navigateToEntryForm(BuildContext context, Item? item) async {
-    var result = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const EntryForm()),
+          ),
+        ),
+      ]),
     );
+  }
+
+  Future<Item> navigateToEntryForm(BuildContext context, Item item) async {
+    var result = await Navigator.push(context,
+        MaterialPageRoute(builder: (BuildContext context) {
+      return EntryForm(item);
+    }));
     return result;
   }
 
+  ListView createListView() {
+    TextStyle textStyle = Theme.of(context).textTheme.headline5;
+    return ListView.builder(
+      itemCount: count,
+      itemBuilder: (BuildContext context, int index) {
+        return Card(
+          color: Colors.white,
+          elevation: 2.0,
+          child: ListTile(
+            leading: const CircleAvatar(
+              backgroundColor: Colors.red,
+              child: Icon(Icons.ad_units),
+            ),
+            title: Text(
+              itemList[index].name,
+              style: textStyle,
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("Rp." + itemList[index].price.toString()),
+                const SizedBox(
+                  height: 5.0,
+                ),
+                Text("Stock : " + itemList[index].stock.toString()),
+                Text("Code : " + itemList[index].code),
+              ],
+            ),
+            trailing: GestureDetector(
+              child: Icon(Icons.delete),
+              onTap: () async {
+                //TODO 3 Panggil Fungsi untuk Delete dari DB berdasarkan Item
+                deleteItem(itemList[index]);
+              },
+            ),
+            onTap: () async {
+              var item = await navigateToEntryForm(context, itemList[index]);
+              //TODO 4 Panggil Fungsi untuk Edit data
+              editItem(itemList[index]);
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  //update List item
   void updateListView() {
-    final Future<Database> dbFuture = SQLHelper.db();
+    final Future<Database> dbFuture = dbHelper.initDb();
     dbFuture.then((database) {
-      //TODO 1 : get all item from DB
-      Future<List<Item>> itemListFuture = SQLHelper.getItemList();
+      //TODO 1 Select data dari DB
+      Future<List<Item>> itemListFuture = dbHelper.getItemList();
       itemListFuture.then((itemList) {
         setState(() {
           this.itemList = itemList;
@@ -107,17 +122,15 @@ class _HomeState extends State<Home> {
     });
   }
 
-  //delete contact
-  void deleteItem(Item item) async {
-    int result = await SQLHelper.deleteItem(item.id);
+  void deleteItem(Item object) async {
+    int result = await dbHelper.delete(object.id);
     if (result > 0) {
       updateListView();
     }
   }
 
-  //Edit contact
-  void editItem(Item item) async {
-    int result = await SQLHelper.updateItem(item);
+  void editItem(Item object) async {
+    int result = await dbHelper.update(object);
     if (result > 0) {
       updateListView();
     }
